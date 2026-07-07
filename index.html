@@ -25,21 +25,10 @@
     text-align: center;
     box-shadow: 0 10px 30px rgba(150, 120, 40, 0.15);
   }
-  h1 {
-    font-size: 22px;
-    color: #7a5c1e;
-    margin-bottom: 6px;
-  }
-  p.sub {
-    color: #9a8455;
-    font-size: 14px;
-    margin-bottom: 24px;
-  }
-  .icon {
-    font-size: 40px;
-    margin-bottom: 12px;
-  }
-  #fileInput { display: none; }
+  h1 { font-size: 22px; color: #7a5c1e; margin-bottom: 6px; }
+  p.sub { color: #9a8455; font-size: 14px; margin-bottom: 24px; }
+  .icon { font-size: 40px; margin-bottom: 12px; }
+  #galleryInput { display: none; }
   .btn {
     display: block;
     width: 100%;
@@ -53,26 +42,10 @@
     transition: transform 0.15s;
   }
   .btn:active { transform: scale(0.97); }
-  .btn-primary {
-    background: linear-gradient(135deg, #d4b96a, #b8983f);
-    color: #fff;
-  }
-  .btn-secondary {
-    background: #fff;
-    color: #7a5c1e;
-    border: 1.5px solid #d4b96a;
-  }
-  #preview {
-    max-width: 100%;
-    border-radius: 10px;
-    margin-bottom: 16px;
-    display: none;
-  }
-  #status {
-    margin-top: 16px;
-    font-size: 14px;
-    min-height: 20px;
-  }
+  .btn-primary { background: linear-gradient(135deg, #d4b96a, #b8983f); color: #fff; }
+  .btn-secondary { background: #fff; color: #7a5c1e; border: 1.5px solid #d4b96a; }
+  #preview { max-width: 100%; border-radius: 10px; margin-bottom: 16px; display: none; }
+  #status { margin-top: 16px; font-size: 14px; min-height: 20px; }
   .success { color: #4a7c3f; }
   .error { color: #b03a3a; }
   .loading { color: #9a8455; }
@@ -88,6 +61,52 @@
     margin-left: 6px;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Live camera overlay */
+  #cameraOverlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: #000;
+    z-index: 999;
+    flex-direction: column;
+  }
+  #cameraOverlay.active { display: flex; }
+  #cameraVideo {
+    flex: 1;
+    width: 100%;
+    object-fit: cover;
+    background: #000;
+  }
+  #cameraControls {
+    padding: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 40px;
+    background: #000;
+  }
+  #shutterBtn {
+    width: 68px;
+    height: 68px;
+    border-radius: 50%;
+    background: #fff;
+    border: 4px solid #d4b96a;
+    cursor: pointer;
+  }
+  #closeCameraBtn {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    background: rgba(255,255,255,0.2);
+    color: #fff;
+    border: none;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    font-size: 20px;
+    cursor: pointer;
+  }
 </style>
 </head>
 <body>
@@ -99,39 +118,122 @@
 
   <img id="preview" alt="preview">
 
-  <input type="file" id="fileInput" accept="image/*" capture="environment">
   <input type="file" id="galleryInput" accept="image/*">
 
-  <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">
-    📷 التقط صورة
-  </button>
-  <button class="btn btn-secondary" onclick="document.getElementById('galleryInput').click()">
-    🖼️ اختر من المعرض
-  </button>
+  <button class="btn btn-primary" id="openCameraBtn">📷 التقط صورة</button>
+  <button class="btn btn-secondary" onclick="document.getElementById('galleryInput').click()">🖼️ اختر من المعرض</button>
 
   <div id="status"></div>
 </div>
+
+<div id="cameraOverlay">
+  <button id="closeCameraBtn">✕</button>
+  <video id="cameraVideo" autoplay playsinline muted></video>
+  <div id="cameraControls">
+    <div id="shutterBtn"></div>
+  </div>
+</div>
+<canvas id="captureCanvas" style="display:none;"></canvas>
 
 <script>
   const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzN8cvrIxAPts1IYX80sakWJzsitT3snLgZRQD7tXO4RQEFR8dYYxsD0JajK4Sa41hIjA/exec";
 
   const statusEl = document.getElementById('status');
   const previewEl = document.getElementById('preview');
+  const overlayEl = document.getElementById('cameraOverlay');
+  const videoEl = document.getElementById('cameraVideo');
+  const canvasEl = document.getElementById('captureCanvas');
+  let currentStream = null;
 
-  document.getElementById('fileInput').addEventListener('change', handleFile);
-  document.getElementById('galleryInput').addEventListener('change', handleFile);
+  document.getElementById('galleryInput').addEventListener('change', handleGalleryFile);
+  document.getElementById('openCameraBtn').addEventListener('click', openCamera);
+  document.getElementById('closeCameraBtn').addEventListener('click', closeCamera);
+  document.getElementById('shutterBtn').addEventListener('click', takeShot);
 
-  function handleFile(e) {
+  function openCamera() {
+    navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: "environment" } },
+      audio: false
+    }).then(function(stream) {
+      currentStream = stream;
+      videoEl.srcObject = stream;
+      overlayEl.classList.add('active');
+    }).catch(function(err) {
+      statusEl.innerHTML = '<span class="error">تعذّر الوصول إلى الكاميرا — تأكد من السماح بالإذن</span>';
+    });
+  }
+
+  function closeCamera() {
+    if (currentStream) {
+      currentStream.getTracks().forEach(track => track.stop());
+      currentStream = null;
+    }
+    overlayEl.classList.remove('active');
+  }
+
+  function takeShot() {
+    const width = videoEl.videoWidth;
+    const height = videoEl.videoHeight;
+    if (!width || !height) return;
+
+    // Downscale directly on capture
+    const maxDimension = 1280;
+    let targetWidth = width;
+    let targetHeight = height;
+    if (width > height && width > maxDimension) {
+      targetHeight = Math.round(height * (maxDimension / width));
+      targetWidth = maxDimension;
+    } else if (height > maxDimension) {
+      targetWidth = Math.round(width * (maxDimension / height));
+      targetHeight = maxDimension;
+    }
+
+    canvasEl.width = targetWidth;
+    canvasEl.height = targetHeight;
+    const ctx = canvasEl.getContext('2d');
+    ctx.drawImage(videoEl, 0, 0, targetWidth, targetHeight);
+
+    const dataUrl = canvasEl.toDataURL('image/jpeg', 0.7);
+    const base64Data = dataUrl.split(',')[1];
+
+    previewEl.src = dataUrl;
+    previewEl.style.display = 'block';
+
+    closeCamera();
+    uploadPhoto(base64Data, 'photo_' + Date.now() + '.jpg', 'image/jpeg');
+  }
+
+  function handleGalleryFile(e) {
     const file = e.target.files[0];
     if (!file) return;
 
     previewEl.src = URL.createObjectURL(file);
     previewEl.style.display = 'block';
+    statusEl.innerHTML = '<span class="loading">جارِ التجهيز<span class="spinner"></span></span>';
 
+    const img = new Image();
     const reader = new FileReader();
-    reader.onload = function() {
-      const base64Data = reader.result.split(',')[1];
-      uploadPhoto(base64Data, file.name || 'photo.jpg', file.type || 'image/jpeg');
+    reader.onload = function(event) {
+      img.onload = function() {
+        const maxDimension = 1280;
+        let width = img.width;
+        let height = img.height;
+        if (width > height && width > maxDimension) {
+          height = Math.round(height * (maxDimension / width));
+          width = maxDimension;
+        } else if (height > maxDimension) {
+          width = Math.round(width * (maxDimension / height));
+          height = maxDimension;
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        const base64Data = canvas.toDataURL('image/jpeg', 0.7).split(',')[1];
+        uploadPhoto(base64Data, 'photo_' + Date.now() + '.jpg', 'image/jpeg');
+      };
+      img.src = event.target.result;
     };
     reader.readAsDataURL(file);
   }
@@ -141,29 +243,19 @@
 
     fetch(SCRIPT_URL, {
       method: 'POST',
-      body: JSON.stringify({
-        filename: filename,
-        mimeType: mimeType,
-        data: base64Data
-      })
+      body: JSON.stringify({ filename: filename, mimeType: mimeType, data: base64Data })
     })
     .then(res => res.json())
     .then(data => {
       if (data.status === 'success') {
         statusEl.innerHTML = '<span class="success">✅ تم الرفع بنجاح! شكراً لكم 💛</span>';
-        e_reset();
       } else {
-        statusEl.innerHTML = '<span class="error">حدث خطأ، حاول مرة أخرى</span>';
+        statusEl.innerHTML = '<span class="error">حدث خطأ: ' + (data.message || 'غير معروف') + '</span>';
       }
     })
     .catch(err => {
       statusEl.innerHTML = '<span class="error">فشل الرفع — تحقق من الاتصال بالإنترنت</span>';
     });
-  }
-
-  function e_reset() {
-    document.getElementById('fileInput').value = '';
-    document.getElementById('galleryInput').value = '';
   }
 </script>
 
