@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Alaa & إسلام — Wedding Photos</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Georgia', 'Amiri', serif;
+    background: linear-gradient(180deg, #f7f1e6 0%, #efe4cd 100%);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .card {
+    background: #fffdf7;
+    border: 1px solid #d4b96a;
+    border-radius: 16px;
+    padding: 32px 24px;
+    max-width: 420px;
+    width: 100%;
+    text-align: center;
+    box-shadow: 0 10px 30px rgba(150, 120, 40, 0.15);
+  }
+  h1 {
+    font-size: 22px;
+    color: #7a5c1e;
+    margin-bottom: 6px;
+  }
+  p.sub {
+    color: #9a8455;
+    font-size: 14px;
+    margin-bottom: 24px;
+  }
+  .icon {
+    font-size: 40px;
+    margin-bottom: 12px;
+  }
+  #fileInput { display: none; }
+  .btn {
+    display: block;
+    width: 100%;
+    padding: 16px;
+    border-radius: 10px;
+    border: none;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    margin-bottom: 12px;
+    transition: transform 0.15s;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn-primary {
+    background: linear-gradient(135deg, #d4b96a, #b8983f);
+    color: #fff;
+  }
+  .btn-secondary {
+    background: #fff;
+    color: #7a5c1e;
+    border: 1.5px solid #d4b96a;
+  }
+  #preview {
+    max-width: 100%;
+    border-radius: 10px;
+    margin-bottom: 16px;
+    display: none;
+  }
+  #status {
+    margin-top: 16px;
+    font-size: 14px;
+    min-height: 20px;
+  }
+  .success { color: #4a7c3f; }
+  .error { color: #b03a3a; }
+  .loading { color: #9a8455; }
+  .spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid #d4b96a;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    vertical-align: middle;
+    margin-left: 6px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="icon">📸</div>
+  <h1>شاركونا لحظاتكم</h1>
+  <p class="sub">التقط صورة أو اختر من معرضك — وسترفع تلقائياً لألبوم العرس</p>
+
+  <img id="preview" alt="preview">
+
+  <input type="file" id="fileInput" accept="image/*" capture="environment">
+  <input type="file" id="galleryInput" accept="image/*">
+
+  <button class="btn btn-primary" onclick="document.getElementById('fileInput').click()">
+    📷 التقط صورة
+  </button>
+  <button class="btn btn-secondary" onclick="document.getElementById('galleryInput').click()">
+    🖼️ اختر من المعرض
+  </button>
+
+  <div id="status"></div>
+</div>
+
+<script>
+  const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzN8cvrIxAPts1IYX80sakWJzsitT3snLgZRQD7tXO4RQEFR8dYYxsD0JajK4Sa41hIjA/exec";
+
+  const statusEl = document.getElementById('status');
+  const previewEl = document.getElementById('preview');
+
+  document.getElementById('fileInput').addEventListener('change', handleFile);
+  document.getElementById('galleryInput').addEventListener('change', handleFile);
+
+  function handleFile(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    previewEl.src = URL.createObjectURL(file);
+    previewEl.style.display = 'block';
+
+    const reader = new FileReader();
+    reader.onload = function() {
+      const base64Data = reader.result.split(',')[1];
+      uploadPhoto(base64Data, file.name || 'photo.jpg', file.type || 'image/jpeg');
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function uploadPhoto(base64Data, filename, mimeType) {
+    statusEl.innerHTML = '<span class="loading">جارِ الرفع<span class="spinner"></span></span>';
+
+    fetch(SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({
+        filename: filename,
+        mimeType: mimeType,
+        data: base64Data
+      })
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.status === 'success') {
+        statusEl.innerHTML = '<span class="success">✅ تم الرفع بنجاح! شكراً لكم 💛</span>';
+        e_reset();
+      } else {
+        statusEl.innerHTML = '<span class="error">حدث خطأ، حاول مرة أخرى</span>';
+      }
+    })
+    .catch(err => {
+      statusEl.innerHTML = '<span class="error">فشل الرفع — تحقق من الاتصال بالإنترنت</span>';
+    });
+  }
+
+  function e_reset() {
+    document.getElementById('fileInput').value = '';
+    document.getElementById('galleryInput').value = '';
+  }
+</script>
+
+</body>
+</html>
